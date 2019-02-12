@@ -21,7 +21,8 @@ header <- dashboardHeader(title="RedListGetter")
 sidebar <- dashboardSidebar(
   sidebarMenu(
     menuItem("Choose something to do:"),
-    menuItem("Get the species details", tabName="details", icon=icon("tree"))
+    menuItem("Get the species details", tabName="details", icon=icon("tree")),
+    menuItem("Look up assesment histories", tabName="history", icon=icon("book"))
   )
 )
 
@@ -49,8 +50,35 @@ body <- dashboardBody(
           box(title="Returned data",
               width=NULL,
               p("results from the IUCN Red List"),
-              DT::dataTableOutput(outputId="contents"),
-              downloadButton("downloadCSV", "DOWNLOAD!"))
+              DT::dataTableOutput(outputId="details"),
+              downloadButton("downloadDetails", "DOWNLOAD!"))
+        )
+      )
+    ),
+    tabItem(
+      tabName="history",
+      h3("Assessment histories - ",
+         tags$a("look up the assessment history of species", 
+                href="http://apiv3.iucnredlist.org/api/v3/docs#species-history-name")),
+      fluidRow(
+        column(
+          width=3,
+          box(title="List of species to look up history for",
+              width=NULL, collapsible=FALSE,
+              tags$form(
+                tags$textarea(id="histories", rows=8, cols=50,
+                              "Cola letouzeyana\n")
+              ),
+              tags$br(),
+              submitButton(text="REQUEST HISTORY!"))
+        ),
+        column(
+          width=9,
+          box(title="Returned assessment histories",
+              width=NULL,
+              p("results from the IUCN Red List"),
+              DT::dataTableOutput(outputId="histories"),
+              downloadButton("downloadHistories", "DOWNLOAD!"))
         )
       )
     )
@@ -84,7 +112,35 @@ server <- function(input, output) {
     species_details
   })
   
-  output$contents <- DT::renderDataTable(redlist_results(),
+  output$details <- DT::renderDataTable(redlist_results(),
+                                         extensions=c("Responsive", "ColReorder"),
+                                         options=list(dom="Rlfrtip", deferRender=TRUE),
+                                         escape=1)
+  
+  get_histories <- reactive({
+    input_species <- str_trim(input$histories)
+    input_species <- str_split(input_species, "\n")
+    input_species <- input_species[[1]][input_species != ""]
+    
+    species_details <- map_dfr(input_species, ~rl_history(.x, key=TOKEN)$result %>% mutate(scientific_name=.x))
+    unfound_species <- input_species[! input_species %in% species_details$scientific_name]
+    
+    first_columns <- c("scientific_name", "year", "code", "category")
+    other_columns <- colnames(species_details)
+    other_columns <- other_columns[! other_columns %in% first_columns]
+    species_details <- select(species_details, one_of(first_columns), one_of(other_columns))
+    
+    output$downloadHistories <- downloadHandler(
+      filename="redlist_assessment_histories.csv",
+      content = function(file=filename) {
+        write_csv(species_details, file, na="")
+      }
+    )
+    
+    species_details
+  })
+  
+  output$histories <- DT::renderDataTable(get_histories(),
                                          extensions=c("Responsive", "ColReorder"),
                                          options=list(dom="Rlfrtip", deferRender=TRUE),
                                          escape=1)
