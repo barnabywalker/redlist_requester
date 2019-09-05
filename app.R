@@ -51,7 +51,7 @@ body <- dashboardBody(
               width=NULL,
               p("results from the IUCN Red List"),
               DT::dataTableOutput(outputId="details"),
-              downloadButton("downloadDetails", "DOWNLOAD!"))
+              downloadButton("downloadCSV", "DOWNLOAD!"))
         )
       )
     ),
